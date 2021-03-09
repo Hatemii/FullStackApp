@@ -2,13 +2,11 @@ const express = require("express")
 const bodyParser = require("body-parser")
 const graphqlHttp = require("express-graphql").graphqlHTTP
 const { buildSchema } = require("graphql")
+const mongoose = require("mongoose")
+const EventModel = require("./model/events")
 
 const app = express()
 app.use(bodyParser.json())
-
-
-// temporary untill we add mongoDB
-const events = []
 
 app.use('/graphql', graphqlHttp({
     schema: buildSchema(`
@@ -35,6 +33,7 @@ app.use('/graphql', graphqlHttp({
 
         type RootMutation {
             createEvent(eventInput: EventInput): Event
+            updateEvent(id: ID!, eventInput: EventInput): Event
         }
 
         schema {
@@ -45,20 +44,57 @@ app.use('/graphql', graphqlHttp({
 
 
     rootValue: {
+
+        // GET
         events: () => {
-            return events
+            return EventModel.find()
+                .then(result => {
+                    return result
+                })
+                .catch(err => {
+                    console.log(err);
+                    throw err
+                })
         },
+
+        // POST
         createEvent: (args) => {
-            const event = {
-                _id: Math.random().toString(),
+            const event = new EventModel({
                 title: args.eventInput.title,
                 description: args.eventInput.description,
                 price: +args.eventInput.price,
-                date: args.eventInput.date
-            }
-            events.push(event)
-            return event
-        }
+                date: new Date(args.eventInput.date)
+            })
+
+            return event.save()
+                .then(result => {
+                    return result // in graphql to return query after clicking RUN MUTATION
+                })
+                .catch(err => {
+                    console.log(err)
+                    throw err
+                })
+        },
+
+        // UPDATE
+        // updateEvent: (args) => {
+        //     if (!args.id) return
+        //     return EventModel.updateOne({ _id: args.id },
+        //         {
+        //             $set: {
+        //                 title: args.eventInput.title,
+        //                 description: args.eventInput.description,
+        //                 price: +args.eventInput.price,
+        //                 date: new Date(args.eventInput.date)
+        //             }
+        //         }).then(result => {
+        //             console.log(result)
+        //         })
+        //         .catch(err => {
+        //             console.log(err);
+        //             throw err
+        //         })
+        // },
     },
 
     graphiql: true
@@ -67,5 +103,21 @@ app.use('/graphql', graphqlHttp({
 );
 
 
+
+// Database Connection
+mongoose.connect(
+    `mongodb+srv://user:zpl0IPjl1tsjYbzk@realmcluster.vgqgf.mongodb.net/newDB?retryWrites=true&w=majority`,
+    {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+    }
+).then(() => {
+    console.log("Connected to Database");
+}).catch((err) => {
+    console.log("Not Connected to Database ERROR! ", err);
+});
+
+
+// PORT
 const port = process.env.PORT || 3000
 app.listen(port, () => console.log(`Server started on port ${port}`))
