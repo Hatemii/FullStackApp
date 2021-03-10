@@ -4,9 +4,12 @@ const graphqlHttp = require("express-graphql").graphqlHTTP
 const { buildSchema } = require("graphql")
 const mongoose = require("mongoose")
 const EventModel = require("./model/events")
+const UserModel = require("./model/user")
+const bcrypt = require('bcryptjs');
 
 const app = express()
 app.use(bodyParser.json())
+
 
 app.use('/graphql', graphqlHttp({
     schema: buildSchema(`
@@ -19,11 +22,24 @@ app.use('/graphql', graphqlHttp({
             date: String!
         }
 
+        type User {
+            _id: ID!
+            email: String!
+            password: String
+        }
+
+        
         input EventInput {
             title: String!
             description: String!
             price: Float!
             date: String!
+        }
+
+
+        input UserInput {
+            email: String!
+            password: String!
         }
 
         type RootQuery {
@@ -34,6 +50,7 @@ app.use('/graphql', graphqlHttp({
         type RootMutation {
             createEvent(eventInput: EventInput): Event
             updateEvent(id: ID!, eventInput: EventInput): Event
+            createUser(userInput: UserInput): User
         }
 
         schema {
@@ -57,7 +74,7 @@ app.use('/graphql', graphqlHttp({
                 })
         },
 
-        // POST
+        // POST EVENTS
         createEvent: (args) => {
             const event = new EventModel({
                 title: args.eventInput.title,
@@ -95,6 +112,38 @@ app.use('/graphql', graphqlHttp({
         //             throw err
         //         })
         // },
+
+
+
+        // POST USERS
+        createUser: (args) => {
+            // first check if user exist in db
+            return UserModel.findOne({ email: args.userInput.email })
+                .then(user => {
+                    if (user) { // if user === true
+                        throw new Error("User already exist")
+                    }
+                    // decrypt password with bcrypt
+                    return bcrypt.hash(args.userInput.password, 12)
+                })
+                .then(hashedPassword => {
+                    const user = new UserModel({
+                        email: args.userInput.email,
+                        password: hashedPassword, // password has stored in db in hash type
+                    })
+                    return user.save()
+                })
+                .then(result => {
+                    return result // if will saved successfully in db --> return result to graphql
+                })
+                .catch(err => {
+                    console.log(err)
+                    throw err
+                })
+        },
+
+
+
     },
 
     graphiql: true
